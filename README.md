@@ -6,8 +6,10 @@ A minimal RE_Kenshi runtime plugin for Kenshi that remembers discovered Meitou w
 
 - F9 — scan and show a report. The complete report is written to the Kenshi log.
 - F10 — toggle automatic tracking. Automatic scans run every 1.5 seconds while enabled.
+- F11 — clear the temporary location markers created by the tracker.
 - Tracks Meitou weapons found on the ground and in nearby character/building inventories.
 - Player-party inventories are scanned regardless of distance.
+- Newly discovered or relocated Meitou weapons create a native Kenshi map debug marker at their last observed position.
 - Each tracked weapon keeps its runtime handle, item name, string ID, holder/status, and last-known coordinates.
 
 ### Important limitation
