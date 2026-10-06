@@ -443,6 +443,36 @@ static bool gScanCommand = false;
 static bool gAutoCommand = false;
 static bool gClearCommand = false;
 
+static bool installHookFromKenshiLib(
+    const char* symbol,
+    void* detour,
+    void** original)
+{
+    HMODULE lib = GetModuleHandleA("KenshiLib.dll");
+    if (!lib)
+    {
+        DebugLog(std::string("Meitou Tracker: KenshiLib.dll is not loaded for hook ") + symbol);
+        return false;
+    }
+
+    void* stub = reinterpret_cast<void*>(GetProcAddress(lib, symbol));
+    if (!stub)
+    {
+        DebugLog(std::string("Meitou Tracker: KenshiLib export not found: ") + symbol);
+        return false;
+    }
+
+    const intptr_t target = KenshiLib::GetRealAddress(stub);
+    if (!target)
+    {
+        DebugLog(std::string("Meitou Tracker: GetRealAddress returned 0: ") + symbol);
+        return false;
+    }
+
+    return KenshiLib::SUCCESS ==
+        KenshiLib::AddHook(target, detour, original);
+}
+
 static void registerCommands(InputHandler* handler)
 {
     if (!handler)
@@ -502,10 +532,10 @@ __declspec(dllexport) void startPlugin()
 {
     DebugLog("Meitou Tracker: startPlugin()");
 
-    if (KenshiLib::SUCCESS != KenshiLib::AddHook(
-        KenshiLib::GetRealAddress(&InputHandler::loadConfig),
-        &loadConfigHook,
-        &gLoadConfigOriginal))
+    if (!installHookFromKenshiLib(
+        "?loadConfig@InputHandler@@QEAAXXZ",
+        reinterpret_cast<void*>(&loadConfigHook),
+        reinterpret_cast<void**>(&gLoadConfigOriginal)))
     {
         DebugLog("Meitou Tracker: could not hook InputHandler::loadConfig");
     }
@@ -513,10 +543,10 @@ __declspec(dllexport) void startPlugin()
     if (key)
         registerCommands(key);
 
-    if (KenshiLib::SUCCESS != KenshiLib::AddHook(
-        KenshiLib::GetRealAddress(&GameWorld::_NV_mainLoop_GPUSensitiveStuff),
-        &mainLoopHook,
-        &gMainLoopOriginal))
+    if (!installHookFromKenshiLib(
+        "?_NV_mainLoop_GPUSensitiveStuff@GameWorld@@QEAAXM@Z",
+        reinterpret_cast<void*>(&mainLoopHook),
+        reinterpret_cast<void**>(&gMainLoopOriginal)))
     {
         DebugLog("Meitou Tracker: could not hook GameWorld main loop");
         return;
