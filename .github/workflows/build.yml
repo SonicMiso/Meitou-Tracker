@@ -35,9 +35,12 @@ jobs:
         run: |
           $deps = Join-Path $env:GITHUB_WORKSPACE "third_party/KenshiLib_deps"
           $kenshiLib = Join-Path $deps "KenshiLib"
-          $boostRoot = Join-Path $env:GITHUB_WORKSPACE "third_party\boost_1_60_0"
-          $boostInstaller = Join-Path $env:RUNNER_TEMP "boost_1_60_0-msvc-14.0-64.exe"
-          $boostLibDir = Join-Path $boostRoot "lib64-msvc-14.0"
+          $work = Join-Path $env:RUNNER_TEMP "meitou_boost"
+          $boostRoot = Join-Path $work "boost_1_60_0"
+          $boostZip = Join-Path $work "boost_1_60_0.zip"
+          $b2Zip = Join-Path $work "b2-5.5.3.zip"
+          $b2Extract = Join-Path $work "b2_extract"
+          $boostLibDir = Join-Path $boostRoot "stage\lib"
 
           if (!(Test-Path (Join-Path $kenshiLib "Include"))) {
             throw "KenshiLib Include directory was not found."
@@ -47,65 +50,79 @@ jobs:
             throw "KenshiLib Libraries directory was not found."
           }
 
-          if (Test-Path $boostRoot) {
-            Remove-Item $boostRoot -Recurse -Force
+          if (Test-Path $work) {
+            Remove-Item $work -Recurse -Force
           }
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
 
-          Write-Host "Downloading the official Boost 1.60.0 MSVC 14.0 x64 binary package..."
-          & curl.exe -L --fail --retry 3 --retry-delay 2 "https://sourceforge.net/projects/boost/files/boost-binaries/1.60.0/boost_1_60_0-msvc-14.0-64.exe/download" -o $boostInstaller
+          Write-Host "Downloading complete Boost 1.60.0 source archive..."
+          & curl.exe -L --fail --retry 3 --retry-delay 2 "https://archives.boost.io/release/1.60.0/source/boost_1_60_0.zip" -o $boostZip
           if ($LASTEXITCODE -ne 0) {
             $code = $LASTEXITCODE
-            throw "Boost binary package download failed with exit code $code."
+            throw "Boost source download failed with exit code $code."
           }
 
-          if (!(Test-Path $boostInstaller)) {
-            throw "Boost binary package was not downloaded: $boostInstaller"
-          }
-
-          New-Item -ItemType Directory -Path $boostRoot -Force | Out-Null
-          & 7z x $boostInstaller "-o$boostRoot" -y
+          Write-Host "Extracting Boost 1.60.0..."
+          & tar -xf $boostZip --directory $work
           if ($LASTEXITCODE -ne 0) {
             $code = $LASTEXITCODE
-            throw "Boost binary package extraction failed with exit code $code."
+            throw "Boost source extraction failed with exit code $code."
           }
 
-          $boostInclude = Get-ChildItem $boostRoot -Filter "unordered_map.hpp" -Recurse -File |
-            Where-Object { $_.FullName -match "\\boost\\unordered_map\.hpp$" } |
+          if (!(Test-Path (Join-Path $boostRoot "boost\unordered_map.hpp"))) {
+            throw "Boost 1.60 source extraction did not produce expected headers: $boostRoot"
+          }
+
+          Write-Host "Downloading B2 5.5.3 prebuilt engine..."
+          & curl.exe -L --fail --retry 3 --retry-delay 2 "https://github.com/bfgroup/b2/releases/download/5.5.3/b2-5.5.3.zip" -o $b2Zip
+          if ($LASTEXITCODE -ne 0) {
+            $code = $LASTEXITCODE
+            throw "B2 download failed with exit code $code."
+          }
+
+          if (Test-Path $b2Extract) {
+            Remove-Item $b2Extract -Recurse -Force
+          }
+          Expand-Archive -Path $b2Zip -DestinationPath $b2Extract -Force
+
+          $b2 = Get-ChildItem $b2Extract -Filter "b2.exe" -Recurse -File |
             Select-Object -First 1
-
-          if (!$boostInclude) {
-            throw "Boost 1.60 headers were not found after extracting the binary package."
+          if (!$b2) {
+            throw "B2 5.5.3 archive did not contain b2.exe."
           }
 
-          $boostIncludeRoot = $boostInclude.Directory.Parent.FullName
-          $libRoot = Get-ChildItem $boostRoot -Directory -Filter "lib64-msvc-14.0" -Recurse |
-            Select-Object -First 1
-          if ($libRoot) {
-            $boostLibDir = $libRoot.FullName
+          Copy-Item $b2.FullName (Join-Path $boostRoot "b2.exe") -Force
+          Write-Host "Using B2 engine: $($b2.FullName)"
+
+          Push-Location $boostRoot
+          & cmd /c "b2.exe --with-system --with-thread toolset=msvc-14.3 address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=shared"
+          if ($LASTEXITCODE -ne 0) {
+            $code = $LASTEXITCODE
+            Pop-Location
+            throw "Boost 1.60 build with B2 5.5.3 failed with exit code $code."
           }
+          Pop-Location
 
           if (!(Test-Path $boostLibDir)) {
-            throw "Boost 1.60 x64 library directory was not found: $boostLibDir"
+            throw "Boost stage\lib directory was not created: $boostLibDir"
           }
 
-          $threadLib = Get-ChildItem $boostLibDir -Filter "libboost_thread-vc140-mt-1_60.lib" -File |
+          $threadLib = Get-ChildItem $boostLibDir -Filter "libboost_thread-vc143-mt-1_60.lib" -File |
             Select-Object -First 1
-          $systemLib = Get-ChildItem $boostLibDir -Filter "libboost_system-vc140-mt-1_60.lib" -File |
+          $systemLib = Get-ChildItem $boostLibDir -Filter "libboost_system-vc143-mt-1_60.lib" -File |
             Select-Object -First 1
 
           if (!$threadLib -or !$systemLib) {
             Write-Host "Available Boost libraries:"
             Get-ChildItem $boostLibDir -Filter "*boost*.lib" -File | Select-Object -ExpandProperty Name
-            throw "Required Boost 1.60 MSVC 14.0 x64 libraries were not found."
+            throw "Required Boost 1.60 MSVC 14.3 libraries were not built."
           }
 
-          Write-Host "Boost include root: $boostIncludeRoot"
-          Write-Host "Boost library directory: $boostLibDir"
           Write-Host "Boost thread: $($threadLib.Name)"
           Write-Host "Boost system: $($systemLib.Name)"
 
           "KENSHILIB_DIR=$kenshiLib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "BOOST_INCLUDE_PATH=$boostIncludeRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "BOOST_INCLUDE_PATH=$boostRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "BOOST_LIBRARY_PATH=$boostLibDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build Release x64
