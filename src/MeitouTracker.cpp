@@ -9,6 +9,7 @@
 #include <kenshi/Inventory.h>
 #include <kenshi/PlayerInterface.h>
 #include <kenshi/RootObject.h>
+#include <kenshi/gui/ManagementScreen.h>
 #include <ois/OISKeyboard.h>
 #include <windows.h>
 
@@ -64,6 +65,15 @@ namespace MeitouTracker
         return -1;
     }
 
+    static void showLocationMarker(const Ogre::Vector3& position)
+    {
+        ManagementScreen* management = ManagementScreen::getSingleton();
+        if (!management)
+            return;
+
+        management->showDebugMarker(position);
+    }
+
     static void markFound(
         Item* item,
         const std::string& status,
@@ -92,6 +102,8 @@ namespace MeitouTracker
             record.seenThisScan = true;
             records.push_back(record);
 
+            showLocationMarker(record.position);
+
             DebugLog(
                 "Meitou Tracker: discovered " + record.name +
                 " [" + record.sid + "] at " + status +
@@ -117,6 +129,8 @@ namespace MeitouTracker
 
         if (changed)
         {
+            showLocationMarker(record.position);
+
             DebugLog(
                 "Meitou Tracker: update " + record.name +
                 " [" + record.sid + "] -> " + record.status +
