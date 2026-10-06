@@ -10,6 +10,7 @@
 #include <kenshi/PlayerInterface.h>
 #include <kenshi/RootObject.h>
 #include <kenshi/gui/ManagementScreen.h>
+#include <kenshi/gui/MapScreen.h>
 #include <ois/OISKeyboard.h>
 #include <windows.h>
 
