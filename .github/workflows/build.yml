@@ -73,25 +73,6 @@ jobs:
             throw "Boost 1.60 source extraction did not produce expected headers: $boostRoot"
           }
 
-          Write-Host "Downloading B2 5.5.3 source..."
-          & curl.exe -L --fail --retry 3 --retry-delay 2 "https://github.com/bfgroup/b2/archive/refs/tags/5.5.3.zip" -o $b2Zip
-          if ($LASTEXITCODE -ne 0) {
-            $code = $LASTEXITCODE
-            throw "B2 source download failed with exit code $code."
-          }
-
-          if (Test-Path $b2Extract) {
-            Remove-Item $b2Extract -Recurse -Force
-          }
-          Expand-Archive -Path $b2Zip -DestinationPath $b2Extract -Force
-
-          $b2Root = Get-ChildItem $b2Extract -Directory |
-            Where-Object { Test-Path (Join-Path $_.FullName "bootstrap.bat") } |
-            Select-Object -First 1
-          if (!$b2Root) {
-            throw "B2 5.5.3 source archive did not contain bootstrap.bat."
-          }
-
           $vswhere = Join-Path $env:ProgramFiles "Microsoft Visual Studio\Installer\vswhere.exe"
           if (!(Test-Path $vswhere)) {
             $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
@@ -106,30 +87,37 @@ jobs:
             throw "Visual Studio VsDevCmd.bat was not found."
           }
 
-          Write-Host "Using Visual Studio developer environment: $vsDevCmd"
+          $boostBootstrap = Join-Path $boostRoot "bootstrap.bat"
+          if (!(Test-Path $boostBootstrap)) {
+            throw "Boost bootstrap.bat was not found: $boostBootstrap"
+          }
 
-          Write-Host "Building B2 5.5.3 with the installed Visual Studio toolchain..."
-          $b2BuildCommand = "`"$vsDevCmd`" -arch=x64 && cd /d `"$b2Root`" && call bootstrap.bat msvc"
-          & cmd.exe /c $b2BuildCommand
+          Write-Host "Bootstrapping Boost 1.60.0's matching B2 engine..."
+          $bootstrapCommand = "`"$vsDevCmd`" -arch=x64 && cd /d `"$boostRoot`" && call bootstrap.bat msvc"
+          & cmd.exe /c $bootstrapCommand
           if ($LASTEXITCODE -ne 0) {
             $code = $LASTEXITCODE
-            throw "B2 bootstrap failed with exit code $code."
+            throw "Boost 1.60 bootstrap failed with exit code $code."
           }
 
-          $b2 = Join-Path $b2Root "b2.exe"
+          $b2 = Join-Path $boostRoot "b2.exe"
           if (!(Test-Path $b2)) {
-            throw "B2 bootstrap completed without producing b2.exe: $b2Root"
+            throw "Boost 1.60 bootstrap completed without producing b2.exe: $boostRoot"
           }
 
-          Copy-Item $b2 (Join-Path $boostRoot "b2.exe") -Force
-          Write-Host "Using B2 engine: $b2"
+          $projectConfig = Join-Path $boostRoot "project-config.jam"
+          @"
+using msvc : 14.0 : cl.exe ;
+"@ | Set-Content -Path $projectConfig -Encoding ascii
 
-          $boostBuildCommand = "`"$vsDevCmd`" -arch=x64 && cd /d `"$boostRoot`" && b2.exe --with-system --with-thread toolset=msvc-14.3 address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=shared"
+          Write-Host "Using Boost 1.60 B2 with VS2022 cl.exe registered as msvc-14.0..."
+          $boostBuildCommand = "`"$vsDevCmd`" -arch=x64 && cd /d `"$boostRoot`" && b2.exe toolset=msvc-14.0 --with-system --with-thread address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=shared"
           & cmd.exe /c $boostBuildCommand
           if ($LASTEXITCODE -ne 0) {
             $code = $LASTEXITCODE
-            throw "Boost 1.60 build with B2 5.5.3 failed with exit code $code."
+            throw "Boost 1.60 build failed with exit code $code."
           }
+
 
           if (!(Test-Path $boostLibDir)) {
             throw "Boost stage\lib directory was not created: $boostLibDir"
