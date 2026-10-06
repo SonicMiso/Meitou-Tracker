@@ -73,11 +73,11 @@ jobs:
             throw "Boost 1.60 source extraction did not produce expected headers: $boostRoot"
           }
 
-          Write-Host "Downloading B2 5.5.3 prebuilt engine..."
-          & curl.exe -L --fail --retry 3 --retry-delay 2 "https://github.com/bfgroup/b2/releases/download/5.5.3/b2-5.5.3.zip" -o $b2Zip
+          Write-Host "Downloading B2 5.5.3 source..."
+          & curl.exe -L --fail --retry 3 --retry-delay 2 "https://github.com/bfgroup/b2/archive/refs/tags/5.5.3.zip" -o $b2Zip
           if ($LASTEXITCODE -ne 0) {
             $code = $LASTEXITCODE
-            throw "B2 download failed with exit code $code."
+            throw "B2 source download failed with exit code $code."
           }
 
           if (Test-Path $b2Extract) {
@@ -85,14 +85,31 @@ jobs:
           }
           Expand-Archive -Path $b2Zip -DestinationPath $b2Extract -Force
 
-          $b2 = Get-ChildItem $b2Extract -Filter "b2.exe" -Recurse -File |
+          $b2Root = Get-ChildItem $b2Extract -Directory |
+            Where-Object { Test-Path (Join-Path $_.FullName "bootstrap.bat") } |
             Select-Object -First 1
-          if (!$b2) {
-            throw "B2 5.5.3 archive did not contain b2.exe."
+          if (!$b2Root) {
+            throw "B2 5.5.3 source archive did not contain bootstrap.bat."
           }
 
-          Copy-Item $b2.FullName (Join-Path $boostRoot "b2.exe") -Force
-          Write-Host "Using B2 engine: $($b2.FullName)"
+          Write-Host "Building B2 5.5.3 with the installed Visual Studio toolchain..."
+          Push-Location $b2Root
+          & cmd /c "bootstrap.bat msvc"
+          if ($LASTEXITCODE -ne 0) {
+            $code = $LASTEXITCODE
+            Pop-Location
+            throw "B2 bootstrap failed with exit code $code."
+          }
+          Pop-Location
+
+          $b2 = Join-Path $b2Root "b2.exe"
+          if (!(Test-Path $b2)) {
+            throw "B2 bootstrap completed without producing b2.exe: $b2Root"
+          }
+
+          Copy-Item $b2 (Join-Path $boostRoot "b2.exe") -Force
+          Write-Host "Using B2 engine: $b2"
+
 
           Push-Location $boostRoot
           & cmd /c "b2.exe --with-system --with-thread toolset=msvc-14.3 address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=shared"
