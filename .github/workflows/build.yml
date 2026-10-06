@@ -105,12 +105,23 @@ jobs:
             throw "Boost 1.60 bootstrap completed without producing b2.exe: $boostRoot"
           }
 
-          $projectConfig = Join-Path $boostRoot "project-config.jam"
-          @"
-          using msvc : 14.0 : cl.exe ;
-          "@ | Set-Content -Path $projectConfig -Encoding ascii
+          $vsInstallPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath |
+            Select-Object -First 1
+          if (!$vsInstallPath) {
+            throw "Visual Studio installation path was not found."
+          }
 
-          Write-Host "Using Boost 1.60 B2 with VS2022 cl.exe registered as msvc-14.0..."
+          $vcVarsAll = Join-Path $vsInstallPath "VC\Auxiliary\Build\vcvarsall.bat"
+          if (!(Test-Path $vcVarsAll)) {
+            throw "Visual Studio vcvarsall.bat was not found: $vcVarsAll"
+          }
+
+          $vcVarsAllJam = $vcVarsAll.Replace("\", "/")
+          $projectConfig = Join-Path $boostRoot "project-config.jam"
+          $msvcConfig = "using msvc : 14.0 : cl.exe : <setup>" + [char]34 + $vcVarsAllJam + [char]34 + " ;"
+          $msvcConfig | Set-Content -Path $projectConfig -Encoding ascii
+
+          Write-Host "Using Boost 1.60 B2 with VS2022 cl.exe and vcvarsall.bat registered as msvc-14.0..."
           $boostBuildCommand = "`"$vsDevCmd`" -arch=x64 && cd /d `"$boostRoot`" && b2.exe toolset=msvc-14.0 --with-system --with-thread address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=shared"
           & cmd.exe /c $boostBuildCommand
           if ($LASTEXITCODE -ne 0) {
