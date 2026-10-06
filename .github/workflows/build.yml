@@ -37,6 +37,8 @@ jobs:
           $kenshiLib = Join-Path $deps "KenshiLib"
           $boostRoot = Join-Path $deps "boost_1_60_0"
           $boostZip = Join-Path $boostRoot "boost.zip"
+          $boostDir = Join-Path $boostRoot "boost"
+          $boostLibDir = Join-Path $boostRoot "stage\lib"
 
           if (!(Test-Path (Join-Path $kenshiLib "Include"))) {
             throw "KenshiLib Include directory was not found."
@@ -50,11 +52,8 @@ jobs:
             throw "Boost archive was not found: $boostZip"
           }
 
-          $boostHeader = Join-Path $boostRoot "boost\unordered_map.hpp"
-          $boostBootstrap = Join-Path $boostRoot "bootstrap.bat"
-
-          if (!(Test-Path $boostHeader) -or !(Test-Path $boostBootstrap)) {
-            Write-Host "Extracting Boost 1.60 using the same tar layout as KenshiLib_Examples_deps/Setup.bat..."
+          if (!(Test-Path $boostDir) -or !(Test-Path $boostLibDir)) {
+            Write-Host "Extracting KenshiLib's bundled Boost 1.60 archive..."
             & tar -xf $boostZip --directory $boostRoot
             if ($LASTEXITCODE -ne 0) {
               $code = $LASTEXITCODE
@@ -62,48 +61,35 @@ jobs:
             }
           }
 
-          if (!(Test-Path $boostHeader)) {
-            throw "Boost headers were not found after extraction: $boostHeader"
+          if (!(Test-Path (Join-Path $boostDir "unordered_map.hpp"))) {
+            throw "Boost headers were not found after extraction: $boostDir"
           }
 
-          if (!(Test-Path $boostBootstrap)) {
-            throw "Boost bootstrap.bat was not found after extraction: $boostBootstrap"
+          if (!(Test-Path $boostLibDir)) {
+            throw "KenshiLib Boost library directory was not found: $boostLibDir"
+          }
+
+          $threadLib = Get-ChildItem $boostLibDir -Filter "libboost_thread-vc140-mt-1_60.lib" -File |
+            Select-Object -First 1
+          $systemLib = Get-ChildItem $boostLibDir -Filter "libboost_system-vc140-mt-1_60.lib" -File |
+            Select-Object -First 1
+
+          if (!$threadLib) {
+            Write-Host "Available Boost libraries:"
+            Get-ChildItem $boostLibDir -Filter "libboost*.lib" -File | Select-Object -ExpandProperty Name
+            throw "Bundled Boost thread library was not found: $boostLibDir"
+          }
+
+          if (!$systemLib) {
+            Write-Host "Available Boost libraries:"
+            Get-ChildItem $boostLibDir -Filter "libboost*.lib" -File | Select-Object -ExpandProperty Name
+            throw "Bundled Boost system library was not found: $boostLibDir"
           }
 
           Write-Host "Using Boost root: $boostRoot"
-
-          Push-Location $boostRoot
-          & cmd /c "bootstrap.bat msvc"
-          if ($LASTEXITCODE -ne 0) {
-            $code = $LASTEXITCODE
-            Pop-Location
-            throw "Boost bootstrap failed with exit code $code."
-          }
-
-          & cmd /c "b2.exe --with-system --with-thread toolset=msvc-14.3 address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=shared"
-          if ($LASTEXITCODE -ne 0) {
-            $code = $LASTEXITCODE
-            Pop-Location
-            throw "Boost build failed with exit code $code."
-          }
-          Pop-Location
-
-          $boostLibDir = Join-Path $boostRoot "stage\lib"
-          if (!(Test-Path $boostLibDir)) {
-            throw "Boost stage\lib directory was not created: $boostLibDir"
-          }
-
-          $boostThread = Get-ChildItem $boostLibDir -Filter "libboost_thread-vc143-mt-1_60.lib" -File |
-            Select-Object -First 1
-          if (!$boostThread) {
-            throw "Boost thread library was not built: $boostLibDir"
-          }
-
-          $boostSystem = Get-ChildItem $boostLibDir -Filter "libboost_system-vc143-mt-1_60.lib" -File |
-            Select-Object -First 1
-          if (!$boostSystem) {
-            throw "Boost system library was not built: $boostLibDir"
-          }
+          Write-Host "Using Boost library directory: $boostLibDir"
+          Write-Host "Boost thread: $($threadLib.Name)"
+          Write-Host "Boost system: $($systemLib.Name)"
 
           "KENSHILIB_DIR=$kenshiLib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "BOOST_INCLUDE_PATH=$boostRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
