@@ -35,6 +35,7 @@ namespace MeitouTracker
     static bool autoScan = false;
     static bool scanWasDown = false;
     static bool autoWasDown = false;
+    static bool clearWasDown = false;
 
     static const float kScanRadius = 400.0f;
     static const int kMaxWorldObjects = 2048;
@@ -362,6 +363,22 @@ namespace MeitouTracker
             report();
     }
 
+    static void clearLocationMarkers()
+    {
+        ManagementScreen* management = ManagementScreen::getSingleton();
+        if (!management || !management->mapScreen)
+            return;
+
+        management->mapScreen->clearTempMarkers();
+
+        if (ou)
+            ou->showPlayerAMessage(
+                "Meitou Tracker: location markers cleared.",
+                false);
+
+        DebugLog("Meitou Tracker: location markers cleared.");
+    }
+
     static void toggleAutoScan()
     {
         autoScan = !autoScan;
@@ -389,6 +406,7 @@ namespace MeitouTracker
 
         const bool scanDown = key->isKeyState("MeitouTracker_Scan");
         const bool autoDown = key->isKeyState("MeitouTracker_Auto");
+        const bool clearDown = key->isKeyState("MeitouTracker_Clear");
 
         if (scanDown && !scanWasDown)
             scan(true);
@@ -396,8 +414,12 @@ namespace MeitouTracker
         if (autoDown && !autoWasDown)
             toggleAutoScan();
 
+        if (clearDown && !clearWasDown)
+            clearLocationMarkers();
+
         scanWasDown = scanDown;
         autoWasDown = autoDown;
+        clearWasDown = clearDown;
     }
 
     static void updateAuto()
@@ -418,6 +440,7 @@ static void (*gMainLoopOriginal)(GameWorld*, float) = 0;
 static void (*gLoadConfigOriginal)(InputHandler*) = 0;
 static bool gScanCommand = false;
 static bool gAutoCommand = false;
+static bool gClearCommand = false;
 
 static void registerCommands(InputHandler* handler)
 {
@@ -441,6 +464,17 @@ static void registerCommands(InputHandler* handler)
             "MeitouTracker_Auto",
             gAutoCommand,
             OIS::KeyCode::KC_F10,
+            OIS::KeyCode::KC_UNASSIGNED,
+            InputHandler::NONE_MASK,
+            InputHandler::GLOBAL);
+    }
+
+    if (handler->commands.find("MeitouTracker_Clear") == handler->commands.end())
+    {
+        handler->addCommand(
+            "MeitouTracker_Clear",
+            gClearCommand,
+            OIS::KeyCode::KC_F11,
             OIS::KeyCode::KC_UNASSIGNED,
             InputHandler::NONE_MASK,
             InputHandler::GLOBAL);
@@ -487,5 +521,5 @@ __declspec(dllexport) void startPlugin()
         return;
     }
 
-    DebugLog("Meitou Tracker: initialized. F9=scan, F10=toggle automatic tracking.");
+    DebugLog("Meitou Tracker: initialized. F9=scan, F10=toggle automatic tracking, F11=clear map markers.");
 }
