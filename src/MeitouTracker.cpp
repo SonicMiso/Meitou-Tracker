@@ -33,10 +33,9 @@ namespace MeitouTracker
 
     static std::vector<Record> records;
     static DWORD lastScanMs = 0;
-    static bool autoScan = false;
-    static bool scanWasDown = false;
-    static bool autoWasDown = false;
-    static bool clearWasDown = false;
+    // Temporary test mode: automatic scanning is always enabled.
+    static bool autoScan = true;
+    static bool autoScanReadyAnnounced = false;
 
     static const float kScanRadius = 400.0f;
     static const int kMaxWorldObjects = 2048;
@@ -402,30 +401,19 @@ namespace MeitouTracker
 
     static void updateInput()
     {
-        if (!key)
-            return;
-
-        const bool scanDown = key->isKeyState("MeitouTracker_Scan");
-        const bool autoDown = key->isKeyState("MeitouTracker_Auto");
-        const bool clearDown = key->isKeyState("MeitouTracker_Clear");
-
-        if (scanDown && !scanWasDown)
-            scan(true);
-
-        if (autoDown && !autoWasDown)
-            toggleAutoScan();
-
-        if (clearDown && !clearWasDown)
-            clearLocationMarkers();
-
-        scanWasDown = scanDown;
-        autoWasDown = autoDown;
-        clearWasDown = clearDown;
+        // Temporary test build: keyboard input is intentionally disabled.
     }
 
     static void updateAuto()
     {
-        if (!autoScan)
+        if (!autoScan || !ou)
+            return;
+
+        // Do not touch world objects while Kenshi is still loading a save/new world.
+        if (ou->isLoadingFromASaveGame() || !ou->initialized || !ou->player)
+            return;
+
+        if (!ou->player->getAnyPlayerCharacter())
             return;
 
         const DWORD now = GetTickCount();
@@ -434,63 +422,18 @@ namespace MeitouTracker
 
         lastScanMs = now;
         scan(false);
+
+        if (!autoScanReadyAnnounced)
+        {
+            autoScanReadyAnnounced = true;
+            DebugLog("Meitou Tracker: automatic scan test mode is ACTIVE.");
+            ou->showPlayerAMessage(
+                "Meitou Tracker: automatic scanning is active.",
+                false);
+        }
     }
-}
 
 static void (*gMainLoopOriginal)(GameWorld*, float) = 0;
-static void (*gLoadConfigOriginal)(InputHandler*) = 0;
-static bool gScanCommand = false;
-static bool gAutoCommand = false;
-static bool gClearCommand = false;
-
-static void registerCommands(InputHandler* handler)
-{
-    if (!handler)
-        return;
-
-    if (handler->commands.find("MeitouTracker_Scan") == handler->commands.end())
-    {
-        handler->addCommand(
-            "MeitouTracker_Scan",
-            gScanCommand,
-            OIS::KeyCode::KC_F9,
-            OIS::KeyCode::KC_UNASSIGNED,
-            InputHandler::NONE_MASK,
-            InputHandler::GLOBAL);
-    }
-
-    if (handler->commands.find("MeitouTracker_Auto") == handler->commands.end())
-    {
-        handler->addCommand(
-            "MeitouTracker_Auto",
-            gAutoCommand,
-            OIS::KeyCode::KC_F10,
-            OIS::KeyCode::KC_UNASSIGNED,
-            InputHandler::NONE_MASK,
-            InputHandler::GLOBAL);
-    }
-
-    if (handler->commands.find("MeitouTracker_Clear") == handler->commands.end())
-    {
-        handler->addCommand(
-            "MeitouTracker_Clear",
-            gClearCommand,
-            OIS::KeyCode::KC_F11,
-            OIS::KeyCode::KC_UNASSIGNED,
-            InputHandler::NONE_MASK,
-            InputHandler::GLOBAL);
-    }
-}
-
-static void loadConfigHook(InputHandler* handler)
-{
-    if (gLoadConfigOriginal)
-        gLoadConfigOriginal(handler);
-
-    // Register after the game's own config load so the plugin bindings are not
-    // overwritten by the user's saved input configuration.
-    registerCommands(handler);
-}
 
 static bool installHookFromKenshiLib(
     const char* symbol,
@@ -536,14 +479,6 @@ __declspec(dllexport) void startPlugin()
     DebugLog("Meitou Tracker: startPlugin()");
 
     if (!installHookFromKenshiLib(
-        "?loadConfig@InputHandler@@QEAAXXZ",
-        reinterpret_cast<void*>(&loadConfigHook),
-        reinterpret_cast<void**>(&gLoadConfigOriginal)))
-    {
-        DebugLog("Meitou Tracker: could not hook InputHandler::loadConfig");
-    }
-
-    if (!installHookFromKenshiLib(
         "?_NV_mainLoop_GPUSensitiveStuff@GameWorld@@QEAAXM@Z",
         reinterpret_cast<void*>(&mainLoopHook),
         reinterpret_cast<void**>(&gMainLoopOriginal)))
@@ -552,5 +487,5 @@ __declspec(dllexport) void startPlugin()
         return;
     }
 
-    DebugLog("Meitou Tracker: initialized. F9=scan, F10=toggle automatic tracking, F11=clear map markers.");
+    DebugLog("Meitou Tracker: initialized in ALWAYS-ON automatic scan test mode (1.5s interval).");
 }
