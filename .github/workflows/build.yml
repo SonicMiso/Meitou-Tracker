@@ -107,8 +107,8 @@ jobs:
 
           $projectConfig = Join-Path $boostRoot "project-config.jam"
           @"
-using msvc : 14.0 : cl.exe ;
-"@ | Set-Content -Path $projectConfig -Encoding ascii
+          using msvc : 14.0 : cl.exe ;
+          "@ | Set-Content -Path $projectConfig -Encoding ascii
 
           Write-Host "Using Boost 1.60 B2 with VS2022 cl.exe registered as msvc-14.0..."
           $boostBuildCommand = "`"$vsDevCmd`" -arch=x64 && cd /d `"$boostRoot`" && b2.exe toolset=msvc-14.0 --with-system --with-thread address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=shared"
