@@ -432,6 +432,7 @@ namespace MeitouTracker
                 false);
         }
     }
+}
 
 static void (*gMainLoopOriginal)(GameWorld*, float) = 0;
 
