@@ -76,6 +76,29 @@ jobs:
             throw "Boost stage\lib does not contain any .lib files: $boostLibDir"
           }
 
+          $boostBootstrap = Join-Path $boost "bootstrap.bat"
+          if (!(Test-Path $boostBootstrap)) {
+            throw "Boost bootstrap.bat was not found: $boostBootstrap"
+          }
+
+          Push-Location $boost
+          & cmd /c "bootstrap.bat msvc"
+          if ($LASTEXITCODE -ne 0) {
+            Pop-Location
+            throw "Boost bootstrap failed with exit code $LASTEXITCODE."
+          }
+
+          & cmd /c "b2.exe --with-system --with-thread toolset=msvc-14.3 address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=static"
+          if ($LASTEXITCODE -ne 0) {
+            Pop-Location
+            throw "Boost build failed with exit code $LASTEXITCODE."
+          }
+          Pop-Location
+
+          if (!(Get-ChildItem $boostLibDir -Filter "libboost_thread-vc143-mt-1_60.lib" -File | Select-Object -First 1)) {
+            throw "Boost thread library was not built: $boostLibDir"
+          }
+
           "KENSHILIB_DIR=$kenshiLib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "BOOST_INCLUDE_PATH=$boost" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "BOOST_LIBRARY_PATH=$boostLibDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
