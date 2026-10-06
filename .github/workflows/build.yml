@@ -133,7 +133,7 @@ jobs:
           $msvcConfig | Set-Content -Path $projectConfig -Encoding ascii
 
           Write-Host "Using Boost 1.60 B2 with VS2022 cl.exe, vcvarsall.bat, and the msvc.jam compatibility patch..."
-          $boostBuildCommand = "`"$vsDevCmd`" -arch=x64 && cd /d `"$boostRoot`" && b2.exe toolset=msvc-14.0 --with-system --with-thread address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=shared"
+          $boostBuildCommand = "`"$vsDevCmd`" -arch=x64 && cd /d `"$boostRoot`" && b2.exe --with-system --with-thread address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=shared"
           & cmd.exe /c $boostBuildCommand
           if ($LASTEXITCODE -ne 0) {
             $code = $LASTEXITCODE
@@ -145,15 +145,15 @@ jobs:
             throw "Boost stage\lib directory was not created: $boostLibDir"
           }
 
-          $threadLib = Get-ChildItem $boostLibDir -Filter "libboost_thread-vc143-mt-1_60.lib" -File |
+          $threadLib = Get-ChildItem $boostLibDir -Filter "libboost_thread-vc140-mt-1_60.lib" -File |
             Select-Object -First 1
-          $systemLib = Get-ChildItem $boostLibDir -Filter "libboost_system-vc143-mt-1_60.lib" -File |
+          $systemLib = Get-ChildItem $boostLibDir -Filter "libboost_system-vc140-mt-1_60.lib" -File |
             Select-Object -First 1
 
           if (!$threadLib -or !$systemLib) {
             Write-Host "Available Boost libraries:"
             Get-ChildItem $boostLibDir -Filter "*boost*.lib" -File | Select-Object -ExpandProperty Name
-            throw "Required Boost 1.60 MSVC 14.3 libraries were not built."
+            throw "Required Boost 1.60 MSVC 14.0-compatible libraries were not built."
           }
 
           Write-Host "Boost thread: $($threadLib.Name)"
