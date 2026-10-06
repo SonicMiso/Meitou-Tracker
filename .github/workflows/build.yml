@@ -84,7 +84,7 @@ jobs:
         shell: pwsh
         run: |
           $out = Join-Path $env:GITHUB_WORKSPACE "build\"
-          msbuild .\MeitouTracker.vcxproj /m /t:Build /p:Configuration=Release /p:Platform=x64 /p:OutDir="$out"
+          msbuild .\MeitouTracker.vcxproj /m /t:Build /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:OutDir="$out"
 
       - name: Verify DLL
         shell: pwsh
