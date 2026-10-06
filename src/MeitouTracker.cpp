@@ -402,12 +402,14 @@ namespace MeitouTracker
 
     static void updateInput()
     {
-        if (!key)
+        if (!key || !key->keyboard)
             return;
 
-        const bool scanDown = key->isKeyState("MeitouTracker_Scan");
-        const bool autoDown = key->isKeyState("MeitouTracker_Auto");
-        const bool clearDown = key->isKeyState("MeitouTracker_Clear");
+        // Read the game's initialized OIS keyboard directly. This avoids depending
+        // on InputHandler command registration/loadConfig ordering.
+        const bool scanDown = key->keyboard->isKeyDown(OIS::KeyCode::KC_F9);
+        const bool autoDown = key->keyboard->isKeyDown(OIS::KeyCode::KC_F10);
+        const bool clearDown = key->keyboard->isKeyDown(OIS::KeyCode::KC_F11);
 
         if (scanDown && !scanWasDown)
             scan(true);
@@ -438,7 +440,6 @@ namespace MeitouTracker
 }
 
 static void (*gMainLoopOriginal)(GameWorld*, float) = 0;
-static void (*gLoadConfigOriginal)(InputHandler*) = 0;
 static bool gScanCommand = false;
 static bool gAutoCommand = false;
 static bool gClearCommand = false;
@@ -473,52 +474,6 @@ static bool installHookFromKenshiLib(
         KenshiLib::AddHook(target, detour, original);
 }
 
-static void registerCommands(InputHandler* handler)
-{
-    if (!handler)
-        return;
-
-    if (handler->commands.find("MeitouTracker_Scan") == handler->commands.end())
-    {
-        handler->addCommand(
-            "MeitouTracker_Scan",
-            gScanCommand,
-            OIS::KeyCode::KC_F9,
-            OIS::KeyCode::KC_UNASSIGNED,
-            InputHandler::NONE_MASK,
-            InputHandler::GLOBAL);
-    }
-
-    if (handler->commands.find("MeitouTracker_Auto") == handler->commands.end())
-    {
-        handler->addCommand(
-            "MeitouTracker_Auto",
-            gAutoCommand,
-            OIS::KeyCode::KC_F10,
-            OIS::KeyCode::KC_UNASSIGNED,
-            InputHandler::NONE_MASK,
-            InputHandler::GLOBAL);
-    }
-
-    if (handler->commands.find("MeitouTracker_Clear") == handler->commands.end())
-    {
-        handler->addCommand(
-            "MeitouTracker_Clear",
-            gClearCommand,
-            OIS::KeyCode::KC_F11,
-            OIS::KeyCode::KC_UNASSIGNED,
-            InputHandler::NONE_MASK,
-            InputHandler::GLOBAL);
-    }
-}
-
-static void loadConfigHook(InputHandler* handler)
-{
-    registerCommands(handler);
-    if (gLoadConfigOriginal)
-        gLoadConfigOriginal(handler);
-}
-
 static void mainLoopHook(GameWorld* world, float time)
 {
     if (gMainLoopOriginal)
@@ -533,17 +488,6 @@ __declspec(dllexport) void startPlugin()
     DebugLog("Meitou Tracker: startPlugin()");
 
     if (!installHookFromKenshiLib(
-        "?loadConfig@InputHandler@@QEAAXXZ",
-        reinterpret_cast<void*>(&loadConfigHook),
-        reinterpret_cast<void**>(&gLoadConfigOriginal)))
-    {
-        DebugLog("Meitou Tracker: could not hook InputHandler::loadConfig");
-    }
-
-    if (key)
-        registerCommands(key);
-
-    if (!installHookFromKenshiLib(
         "?_NV_mainLoop_GPUSensitiveStuff@GameWorld@@QEAAXM@Z",
         reinterpret_cast<void*>(&mainLoopHook),
         reinterpret_cast<void**>(&gMainLoopOriginal)))
@@ -552,5 +496,5 @@ __declspec(dllexport) void startPlugin()
         return;
     }
 
-    DebugLog("Meitou Tracker: initialized. F9=scan, F10=toggle automatic tracking, F11=clear map markers.");
+    DebugLog("Meitou Tracker: initialized. Direct OIS hotkeys: F9=scan, F10=toggle automatic tracking, F11=clear map markers.");
 }
