@@ -22,7 +22,7 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>$(KENSHILIB_DIR)\Include;$(BOOST_INCLUDE_PATH);$(IncludePath)</IncludePath>
-    <LibraryPath>$(KENSHILIB_DIR)\Libraries;$(BOOST_INCLUDE_PATH)\stage\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(KENSHILIB_DIR)\Libraries;$(BOOST_LIBRARY_PATH);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
