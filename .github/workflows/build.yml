@@ -117,11 +117,22 @@ jobs:
           }
 
           $vcVarsAllJam = $vcVarsAll.Replace("\", "/")
+          $msvcJam = Join-Path $boostRoot "tools\build\src\tools\msvc.jam"
+          if (!(Test-Path $msvcJam)) {
+            throw "Boost 1.60 msvc.jam was not found: $msvcJam"
+          }
+
+          $msvcJamContent = Get-Content $msvcJam -Raw
+          if ($msvcJamContent -notmatch "(?m)^import errors ;") {
+            $msvcJamContent = "import errors ;" + [Environment]::NewLine + $msvcJamContent
+            Set-Content -Path $msvcJam -Value $msvcJamContent -Encoding ascii
+          }
+
           $projectConfig = Join-Path $boostRoot "project-config.jam"
           $msvcConfig = "using msvc : 14.0 : cl.exe : <setup>" + [char]34 + $vcVarsAllJam + [char]34 + " ;"
           $msvcConfig | Set-Content -Path $projectConfig -Encoding ascii
 
-          Write-Host "Using Boost 1.60 B2 with VS2022 cl.exe and vcvarsall.bat registered as msvc-14.0..."
+          Write-Host "Using Boost 1.60 B2 with VS2022 cl.exe, vcvarsall.bat, and the msvc.jam compatibility patch..."
           $boostBuildCommand = "`"$vsDevCmd`" -arch=x64 && cd /d `"$boostRoot`" && b2.exe toolset=msvc-14.0 --with-system --with-thread address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=shared"
           & cmd.exe /c $boostBuildCommand
           if ($LASTEXITCODE -ne 0) {
