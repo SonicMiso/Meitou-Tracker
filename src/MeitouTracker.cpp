@@ -402,6 +402,8 @@ namespace MeitouTracker
 
 static void (*gMainLoopOriginal)(GameWorld*, float) = 0;
 static void (*gLoadConfigOriginal)(InputHandler*) = 0;
+static bool gScanCommand = false;
+static bool gAutoCommand = false;
 
 static void registerCommands(InputHandler* handler)
 {
@@ -412,7 +414,7 @@ static void registerCommands(InputHandler* handler)
     {
         handler->addCommand(
             "MeitouTracker_Scan",
-            false,
+            gScanCommand,
             OIS::KeyCode::KC_F9,
             OIS::KeyCode::KC_UNASSIGNED,
             InputHandler::NONE_MASK,
@@ -423,7 +425,7 @@ static void registerCommands(InputHandler* handler)
     {
         handler->addCommand(
             "MeitouTracker_Auto",
-            false,
+            gAutoCommand,
             OIS::KeyCode::KC_F10,
             OIS::KeyCode::KC_UNASSIGNED,
             InputHandler::NONE_MASK,
