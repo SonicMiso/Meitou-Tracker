@@ -66,15 +66,7 @@ jobs:
           }
 
           $boost = $boostHeader.Directory.Parent.FullName
-          $boostLibDir = Join-Path $boost "stage\lib"
-
-          if (!(Test-Path $boostLibDir)) {
-            throw "Boost stage\lib directory was not found under: $boost"
-          }
-
-          if (!(Get-ChildItem $boostLibDir -Filter "*.lib" -File | Select-Object -First 1)) {
-            throw "Boost stage\lib does not contain any .lib files: $boostLibDir"
-          }
+          Write-Host "Detected Boost root: $boost"
 
           $boostBootstrap = Join-Path $boost "bootstrap.bat"
           if (!(Test-Path $boostBootstrap)) {
@@ -84,19 +76,34 @@ jobs:
           Push-Location $boost
           & cmd /c "bootstrap.bat msvc"
           if ($LASTEXITCODE -ne 0) {
+            $code = $LASTEXITCODE
             Pop-Location
-            throw "Boost bootstrap failed with exit code $LASTEXITCODE."
+            throw "Boost bootstrap failed with exit code $code."
           }
 
           & cmd /c "b2.exe --with-system --with-thread toolset=msvc-14.3 address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=shared"
           if ($LASTEXITCODE -ne 0) {
+            $code = $LASTEXITCODE
             Pop-Location
-            throw "Boost build failed with exit code $LASTEXITCODE."
+            throw "Boost build failed with exit code $code."
           }
           Pop-Location
 
-          if (!(Get-ChildItem $boostLibDir -Filter "libboost_thread-vc143-mt-1_60.lib" -File | Select-Object -First 1)) {
+          $boostLibDir = Join-Path $boost "stage\lib"
+          if (!(Test-Path $boostLibDir)) {
+            throw "Boost stage\lib directory was not created: $boostLibDir"
+          }
+
+          $boostThread = Get-ChildItem $boostLibDir -Filter "libboost_thread-vc143-mt-1_60.lib" -File |
+            Select-Object -First 1
+          if (!$boostThread) {
             throw "Boost thread library was not built: $boostLibDir"
+          }
+
+          $boostSystem = Get-ChildItem $boostLibDir -Filter "libboost_system-vc143-mt-1_60.lib" -File |
+            Select-Object -First 1
+          if (!$boostSystem) {
+            throw "Boost system library was not built: $boostLibDir"
           }
 
           "KENSHILIB_DIR=$kenshiLib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
