@@ -92,15 +92,29 @@ jobs:
             throw "B2 5.5.3 source archive did not contain bootstrap.bat."
           }
 
+          $vswhere = Join-Path $env:ProgramFiles "Microsoft Visual Studio\Installer\vswhere.exe"
+          if (!(Test-Path $vswhere)) {
+            $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          }
+          if (!(Test-Path $vswhere)) {
+            throw "vswhere.exe was not found."
+          }
+
+          $vsDevCmd = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find "Common7\Tools\VsDevCmd.bat" |
+            Select-Object -First 1
+          if (!$vsDevCmd -or !(Test-Path $vsDevCmd)) {
+            throw "Visual Studio VsDevCmd.bat was not found."
+          }
+
+          Write-Host "Using Visual Studio developer environment: $vsDevCmd"
+
           Write-Host "Building B2 5.5.3 with the installed Visual Studio toolchain..."
-          Push-Location $b2Root
-          & cmd /c "bootstrap.bat msvc"
+          $b2BuildCommand = "`"$vsDevCmd`" -arch=x64 && cd /d `"$b2Root`" && call bootstrap.bat msvc"
+          & cmd.exe /c $b2BuildCommand
           if ($LASTEXITCODE -ne 0) {
             $code = $LASTEXITCODE
-            Pop-Location
             throw "B2 bootstrap failed with exit code $code."
           }
-          Pop-Location
 
           $b2 = Join-Path $b2Root "b2.exe"
           if (!(Test-Path $b2)) {
@@ -110,15 +124,12 @@ jobs:
           Copy-Item $b2 (Join-Path $boostRoot "b2.exe") -Force
           Write-Host "Using B2 engine: $b2"
 
-
-          Push-Location $boostRoot
-          & cmd /c "b2.exe --with-system --with-thread toolset=msvc-14.3 address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=shared"
+          $boostBuildCommand = "`"$vsDevCmd`" -arch=x64 && cd /d `"$boostRoot`" && b2.exe --with-system --with-thread toolset=msvc-14.3 address-model=64 architecture=x86 threading=multi variant=release link=static runtime-link=shared"
+          & cmd.exe /c $boostBuildCommand
           if ($LASTEXITCODE -ne 0) {
             $code = $LASTEXITCODE
-            Pop-Location
             throw "Boost 1.60 build with B2 5.5.3 failed with exit code $code."
           }
-          Pop-Location
 
           if (!(Test-Path $boostLibDir)) {
             throw "Boost stage\lib directory was not created: $boostLibDir"
