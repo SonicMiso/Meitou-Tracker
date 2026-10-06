@@ -36,6 +36,8 @@ namespace MeitouTracker
     // Temporary test mode: automatic scanning is always enabled.
     static bool autoScan = true;
     static bool autoScanReadyAnnounced = false;
+    // Give Kenshi time to finish post-load object reconstruction before scanning.
+    static DWORD stableWorldSinceMs = 0;
 
     static const float kScanRadius = 400.0f;
     static const int kMaxWorldObjects = 2048;
@@ -43,6 +45,7 @@ namespace MeitouTracker
     static const int kMaxBuildings = 2048;
     static const int kMaxInventoryDepth = 3;
     static const DWORD kAutoScanIntervalMs = 1500;
+    static const DWORD kPostLoadStabilizationMs = 5000;
 
     static std::string formatPosition(const Ogre::Vector3& position)
     {
@@ -346,13 +349,9 @@ namespace MeitouTracker
         for (size_t i = 0; i < records.size(); ++i)
             records[i].seenThisScan = false;
 
+        // Use the camera center here. getAnyPlayerCharacter() can temporarily
+        // return an invalid object while Kenshi is rebuilding player state.
         Ogre::Vector3 center = ou->getCameraCenter();
-        if (ou->player)
-        {
-            Character* playerCharacter = ou->player->getAnyPlayerCharacter();
-            if (playerCharacter)
-                center = playerCharacter->getPosition();
-        }
 
         scanNearbyGroundWeapons(center);
         scanNearbyCharacters(center);
@@ -409,14 +408,28 @@ namespace MeitouTracker
         if (!autoScan || !ou)
             return;
 
-        // Do not touch world objects while Kenshi is still loading a save/new world.
+        // Treat both the load phase and the following stabilization window as
+        // unsafe for inventory/object traversal.
         if (ou->isLoadingFromASaveGame() || !ou->initialized || !ou->player)
+        {
+            stableWorldSinceMs = 0;
+            lastScanMs = 0;
+            autoScanReadyAnnounced = false;
             return;
-
-        if (!ou->player->getAnyPlayerCharacter())
-            return;
+        }
 
         const DWORD now = GetTickCount();
+
+        if (stableWorldSinceMs == 0)
+        {
+            stableWorldSinceMs = now;
+            DebugLog("Meitou Tracker: world load finished; waiting for post-load stabilization.");
+            return;
+        }
+
+        if (now - stableWorldSinceMs < kPostLoadStabilizationMs)
+            return;
+
         if (lastScanMs != 0 && now - lastScanMs < kAutoScanIntervalMs)
             return;
 
